@@ -4,15 +4,16 @@
     [re-frame.core :as rf]
     [re-frame.std-interceptors :as rfstd]
     [todomvc.db :as todo-db]
-    [todomvc.enflame :as flame]))
+    [todomvc.enflame :as flame]
+  ))
 
 ; context map (ctx):   { :coeffects   {:db {...}
 ;                                      :other {...}}
 ;                        :effects     {:db {...}
 ;                                      :dispatch [...]}
-;                      }
-; intceptors' :before fns should accumulate data into :coeffects map
-; intceptors' :after  fns should accumulate data into   :effects map
+;                        ... ; other stuff }
+; interceptors' :before fns should accumulate data into :coeffects map
+; interceptors' :after  fns should accumulate data into   :effects map
 
 ;-----------------------------------------------------------------------------
 ; #todo unify interceptors/handlers:  all accept & return
@@ -58,7 +59,6 @@
 ; #todo (dispatch-event {:event/id <some-id> ...} )   => event map
 ; #todo (add-effect ctx {:effect/id <some-id> ...} )  => updated ctx
 
-
 ; -- Interceptors --------------------------------------------------------------
 ;
 ; Interceptors are a more advanced topic. So, we're plunging into the deep
@@ -103,7 +103,7 @@
     (throw (ex-info (str "spec check failed: " (s/explain-str a-spec db)) {}))))
 
 (def check-spec-intc
-  (rf/after ; An `after` interceptor receives `db`, not `ctx. Return value is ignored.
+  (rf/after ; An `after` interceptor receives `db` from (:effects ctx). Return value is ignored.
     (fn [db -event-]
       (println :check-spec-intc :enter db)
       (check-and-throw :todomvc.db/db db))))
@@ -161,7 +161,7 @@
   ; #todo      effects -> outputs   ; result
 
   ; the event handler being registered
-  (fn [ state  <> ]                  ; take 2 values from coeffects. Ignore event vector itself.
+  (fn [ state  -event- ] ; note that `state` is coeffects/effects (ignore the difference)
     (js/console.log :initialise-db )
     (let [{:keys [db local-store-todos]} state
           result {:db todo-db/default-db ; #awt
@@ -198,7 +198,7 @@
   ; And, further, it means the event handler returns just the value to be
   ; put into the `[:todos]` path, and not the entire `db`.
   ; So, againt, a path interceptor acts like clojure's `update-in`
-  (fn [state [_ text]] ; => {:global-state xxx   :event {:event-name xxx  :arg1 yyy  :arg2 zzz ...}}
+  (fn [state [-e- text]] ; => {:global-state xxx   :event {:event-name xxx  :arg1 yyy  :arg2 zzz ...}}
     (update-in state [:db :todos]  ; #todo make this be (with-path state [:db :todos] ...) macro
       (fn [todos]                 ; #todo kill this part
         (let [id     (allocate-next-id todos)
@@ -208,7 +208,7 @@
 
 (flame/event-handler-for! :toggle-done
   std-interceptors
-  (fn [state [_ id]]
+  (fn [state [-e- id]]
     (update-in state [:db :todos]
       (fn [todos]
         (let [result (update-in todos [id :done] not)]
@@ -217,21 +217,21 @@
 
 (flame/event-handler-for! :save
   std-interceptors
-  (fn [state [_ id title]]
+  (fn [state [-e- id title]]
     (let [result (assoc-in state [:db :todos id :title] title)]
       (js/console.info :save :leave result )
       result)))
 
 (flame/event-handler-for! :delete-todo
   std-interceptors
-  (fn [state [_ id]]
+  (fn [state [-e- id]]
     (let [result (flame/dissoc-in state [:db :todos id])]
       (js/console.info :delete-todo :leave result )
       result)))
 
 (flame/event-handler-for! :clear-completed
   std-interceptors
-  (fn [state _]
+  (fn [state -event-]
     (let [todos     (get-in state [:db :todos])
           done-ids  (->> (vals todos) ; find id's for todos where (:done -> true)
                       (filter :done)
@@ -243,7 +243,7 @@
 
 (flame/event-handler-for! :complete-all-toggle
   std-interceptors
-  (fn [state _]
+  (fn [state -event-]
     (let [todos     (get-in state [:db :todos])
           new-done  (not-every? :done (vals todos)) ; work out: toggle true or false?
           todos-new (reduce #(assoc-in %1 [%2 :done] new-done)

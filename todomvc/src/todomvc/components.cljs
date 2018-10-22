@@ -1,11 +1,9 @@
-(ns todomvc.views
+(ns todomvc.components
+  "These functions are all Reagent components"
   (:require
     [clojure.string :as str]
-    [re-frame.core :as rf ]
     [reagent.core :as r]
-    [todomvc.enflame :as flame] ))
-
-; These functions are all Reagent components
+    [todomvc.enflame :as flame]))
 
 (defn input-field
   [{:keys [title on-save on-stop]}] ; #todo -> (with-map-vals [title on-save on-stop] ...)
@@ -26,8 +24,9 @@
           :on-change   #(reset! text-val (flame/event-val %))
           :on-key-down #(let [rcvd (.-which %)] ; KeyboardEvent property
                           (condp = rcvd
-                                flame/ascii-code-return (save-fn)
-                                flame/ascii-code-escape (stop-fn)))})])))
+                            flame/ascii-code-return (save-fn)
+                            flame/ascii-code-escape (stop-fn)
+                            :else nil))})])))
 
 (defn task-list-row []
   (let [editing (r/atom false)]
@@ -71,17 +70,17 @@
 
 (defn footer-controls []
   (let [[num-active num-done] (flame/from-topic [:footer-counts])
-        showing (flame/from-topic [:showing])
-        a-fn    (fn [filter-kw txt]
-                  [:a {:class (when (= filter-kw showing) "selected")
-                       :href  (str "#/" (name filter-kw))} txt])]
+        showing             (flame/from-topic [:showing])
+        anchor-generator-fn (fn [filter-kw txt]
+                              [:a {:class (when (= filter-kw showing) "selected")
+                                   :href  (str "#/" (name filter-kw))} txt])]
     [:footer#footer
      [:span#todo-count
       [:strong num-active] " " (case num-active 1 "item" "items") " left"]
      [:ul#filters
-      [:li (a-fn :all "All")]
-      [:li (a-fn :active "Active")]
-      [:li (a-fn :done "Completed")]]
+      [:li (anchor-generator-fn :all "All")]
+      [:li (anchor-generator-fn :active "Active")]
+      [:li (anchor-generator-fn :done "Completed")]]
      (when (pos? num-done)
        [:button#clear-completed
         {:on-click #(flame/dispatch-event [:clear-completed])}

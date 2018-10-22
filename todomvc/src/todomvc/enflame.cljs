@@ -35,5 +35,5 @@
 
 (defn dispatch-event-sync [& args] (apply rf/dispatch-sync args) )
 
-(defn register-topic! [& forms] (apply rf/reg-sub forms))
+(defn publish-topic! [& forms] (apply rf/reg-sub forms))
 

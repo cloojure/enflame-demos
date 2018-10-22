@@ -1,4 +1,4 @@
-(ns todomvc.subs
+(ns todomvc.topics
   (:require
     [todomvc.enflame :as flame]
     [re-frame.core :as rf]))
@@ -14,7 +14,7 @@
 ; Why?  It is an efficiency thing. Every Layer 2 subscription will rerun any time
 ; that `app-db` changes (in any way). As a result, we want Layer 2 to be trivial.
 
-(flame/register-topic!
+(flame/publish-topic!
   :showing ; usage:   (rf/subscribe [:showing])
   (fn [db _]        ; db is the (map) value stored in the app-db atom
     (:showing db))) ; extract a value from the application state
@@ -25,7 +25,7 @@
 (defn sorted-todos-fn [db _]
   (:todos db))
 
-(flame/register-topic!
+(flame/publish-topic!
   :sorted-todos
   sorted-todos-fn)    ; usage: (rf/subscribe [:sorted-todos])
 
@@ -59,7 +59,7 @@
 ; In the two simple examples at the top, we only supplied the 2nd of these functions.
 ; But now we are dealing with intermediate (layer 3) nodes, we'll need to provide both fns.
 ;
-(flame/register-topic!
+(flame/publish-topic!
   :todos   ; usage:  (rf/subscribe [:todos])
   ; This function returns the input signals. In this case, it returns a single signal.
   ; Although not required in this example, it is called with two parameters
@@ -87,7 +87,7 @@
 ; This time the computation involves two input signals. As a result note:
 ;   - the first function (which returns the signals) returns a 2-vector
 ;   - the second function (which is the computation) destructures this 2-vector as its first parameter
-(flame/register-topic!
+(flame/publish-topic!
   :visible-todos
 
   ; Signal Function
@@ -143,7 +143,7 @@
 ; rf/reg-sub provides some macro sugar so you can nominate a very minimal
 ; vector of input signals. The 1st function is not needed.
 ; Here is the example above rewritten using the sugar.
-(flame/register-topic! :visible-todos-with-sugar
+(flame/publish-topic! :visible-todos-with-sugar
   :<- [:todos]
   :<- [:showing]
   (fn [[todos showing] _]
@@ -153,17 +153,17 @@
                       :all    identity)]
       (filter filter-fn todos))))
 
-(flame/register-topic! :all-complete?
+(flame/publish-topic! :all-complete?
   :<- [:todos]
   (fn [todos _]
     (every? :done todos)))
 
-(flame/register-topic! :completed-count
+(flame/publish-topic! :completed-count
   :<- [:todos]
   (fn [todos _]
     (count (filter :done todos))))
 
-(flame/register-topic! :footer-counts
+(flame/publish-topic! :footer-counts
   :<- [:todos]
   :<- [:completed-count]
   (fn [[todos completed] _]

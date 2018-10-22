@@ -5,8 +5,8 @@
             [re-frame.core :as rf ]
             [secretary.core :as secretary]
             [todomvc.events] ; These two are only required to make the compiler
-            [todomvc.subs] ; load them (see docs/Basic-App-Structure.md)
-            [todomvc.views]
+            [todomvc.topics] ; load them (see docs/Basic-App-Structure.md)
+            [todomvc.components]
             [todomvc.enflame :as flame]
             [devtools.core :as devtools])
   (:import [goog History]
@@ -52,6 +52,6 @@
   ; Render the UI into the HTML's <div id="app" /> element
   ; The view function `todomvc.views/todo-app` is the
   ; root view for the entire UI.
-  (reagent/render [todomvc.views/todo-app]
+  (reagent/render [todomvc.components/todo-app]
     (.getElementById js/document "app")))
 

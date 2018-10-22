@@ -1,6 +1,8 @@
 (ns todomvc.enflame ; #todo => re-state ???
   (:require
-    [re-frame.core :as rf] ))
+    [re-frame.core :as rf]
+    [re-frame.loggers :as rflog]
+    [re-frame.interceptor :as rfi]))
 
 
 (defn dissoc-in
@@ -49,3 +51,33 @@
                 (let [trim-fn (fn [event] (-> event rest vec))]
                   (update-in context [:coeffects :event] trim-fn)))))
   )
+
+;---------------------------------------------------------------------------------------------------
+; tracing interceptor (modified rfstd/debug
+
+(def trace
+  "An interceptor which logs/instruments an event handler's actions to
+  `js/console.log`. See examples/todomvc/src/events.cljs for use.
+  Output includes:
+  1. the event vector
+  2. orig db
+  3. new db
+  "
+  (rfi/->interceptor
+    :id     ::trace
+    :before (fn debug-before
+              [context]
+              (rflog/console :log "Handling re-frame event:" (rfi/get-coeffect context :event))
+              context)
+
+    :after  (fn debug-after
+              [context]
+              (let [event   (rfi/get-coeffect context :event)
+                    db-orig (rfi/get-coeffect context :db)
+                    db-new  (rfi/get-effect   context :db ::not-found)]
+                (do (rflog/console :group "db for:" event)
+                    (rflog/console :log :before db-orig)
+                    (rflog/console :log :after db-new)
+                    (rflog/console :groupEnd))
+                context))))
+

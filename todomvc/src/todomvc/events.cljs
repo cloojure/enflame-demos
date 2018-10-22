@@ -110,7 +110,8 @@
 ; which manipulate todos. A chain of interceptors is a vector of interceptors.
 ; Explanation of the `path` Interceptor is given further below.
 (def std-interceptors
-  [check-spec-intc      ; ensure the spec is still valid  (rf/after)
+  [
+   ; #awt check-spec-intc      ; ensure the spec is still valid  (rf/after)
 
    ; Part of the TodoMVC is to store todos in local storage. Here we define an interceptor to do this.
    ; This interceptor runs `after` an event handler. It stores the current todos into local storage.
@@ -145,7 +146,8 @@
 
   ; the interceptor chain (a vector of 2 interceptors in this case)
   [(rf/inject-cofx :local-store-todos) ; gets todos from localstore, and puts value into coeffects arg
-   check-spec-intc]  ; after event handler runs, check app-db for correctness. Does it still match Spec?
+   ; #awt check-spec-intc
+   ]  ; after event handler runs, check app-db for correctness. Does it still match Spec?
   ; #todo  context -> event
   ; #todo    :event/id
   ; #todo    :event/params
@@ -154,7 +156,12 @@
 
   ; the event handler being registered
   (fn [ {:keys [db local-store-todos]} <> ]                  ; take 2 values from coeffects. Ignore event vector itself.
-    {:db (assoc todo-db/default-db :todos local-store-todos)}))   ; all hail the new state to be put in app-db
+    (println :initialise-db )
+    (let [result {:db  todo-db/default-db ; #awt
+                  ; (assoc todo-db/default-db :todos local-store-todos)
+                  }]
+      (println :initialise-db :leave result )
+      result)))   ; all hail the new state to be put in app-db
 
 ; Need a way to document event names and args
 ;    #todo (defevent set-showing [state])
@@ -162,11 +169,10 @@
 ; usage:  (flame/dispatch-event [:set-showing :active])
 ; This event is dispatched when the user clicks on one of the 3 filter buttons at the bottom of the display.
   ; #todo #awt merge => global state (old cofx)
-(flame/event-handler-for!
-  :set-showing
+(flame/event-handler-for! :set-showing
 
   ; only one interceptor
-  [check-spec-intc]  ; after event handler runs, check app-db for correctness. Does it still match Spec?
+  ; #awt [check-spec-intc]  ; after event handler runs, check app-db for correctness. Does it still match Spec?
 
   ; handler
   (fn [ctx [_ new-filter-kw]]     ; new-filter-kw is one of :all, :active or :done
@@ -187,35 +193,44 @@
   ; So, againt, a path interceptor acts like clojure's `update-in`
   (fn [ctx [_ text]] ; => {:global-state xxx   :event {:event-name xxx  :arg1 yyy  :arg2 zzz ...}}
     (let [todos (get-in ctx [:db :todos])
-          id    (allocate-next-id todos)]
-      (assoc-in ctx [:db :todos id] {:id id :title text :done false}))))
+          id    (allocate-next-id todos)
+      result (assoc-in ctx [:db :todos id] {:id id :title text :done false})]
+      (println :add-todo :leave result )
+      result)))
 
 
 (flame/event-handler-for! :toggle-done
   std-interceptors
   (fn [ctx [_ id]]
-    (update-in ctx [:db :todos id :done] not)))
+    (let [result (update-in ctx [:db :todos id :done] not)]
+      (println :toggle-done :leave result )
+      result)))
 
 (flame/event-handler-for! :save
   std-interceptors
   (fn [ctx [_ id title]]
-    (assoc-in ctx [:db :todos id :title] title)))
+    (let [result (assoc-in ctx [:db :todos id :title] title)]
+      (println :save :leave result )
+      result)))
 
 (flame/event-handler-for! :delete-todo
   std-interceptors
   (fn [ctx [_ id]]
-    (flame/dissoc-in ctx [:db :todos id])))
+    (let [result (flame/dissoc-in ctx [:db :todos id])]
+      (println :delete-todo :leave result )
+      result)))
 
-(flame/event-handler-for!
-  :clear-completed
+(flame/event-handler-for! :clear-completed
   std-interceptors
   (fn [ctx _]
     (let [todos     (get-in ctx [:db :todos])
           done-ids  (->> (vals todos) ; find id's for todos where (:done -> true)
                       (filter :done)
                       (map :id))
-          todos-new (reduce dissoc todos done-ids)]      ; delete todos which are done
-      (assoc-in ctx [:db :todos] todos-new))))
+          todos-new (reduce dissoc todos done-ids) ; delete todos which are done
+          result    (assoc-in ctx [:db :todos] todos-new)]
+      (println :clear-completed :leave result)
+      result)))
 
 (flame/event-handler-for! :complete-all-toggle
   std-interceptors
@@ -224,5 +239,7 @@
           new-done  (not-every? :done (vals todos)) ; work out: toggle true or false?
           todos-new (reduce #(assoc-in %1 [%2 :done] new-done)
                       todos
-                      (keys todos))]
-      (assoc-in ctx [:db :todos] todos-new))))
+                      (keys todos))
+          result    (assoc-in ctx [:db :todos] todos-new)]
+      (println :complete-all-toggle :leave result)
+      result)))

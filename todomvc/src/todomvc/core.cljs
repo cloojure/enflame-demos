@@ -1,14 +1,16 @@
 (ns todomvc.core
   (:require-macros [secretary.core :refer [defroute]])
-  (:require [goog.events :as events]
-            [reagent.core :as reagent]
-            [re-frame.core :as rf ]
-            [secretary.core :as secretary]
-            [todomvc.events] ; These two are only required to make the compiler
-            [todomvc.topics] ; load them (see docs/Basic-App-Structure.md)
-            [todomvc.components]
-            [todomvc.enflame :as flame]
-            [devtools.core :as devtools])
+  (:require
+    [devtools.core :as devtools]
+    [goog.events :as events]
+    [re-frame.core :as rf]
+    [reagent.core :as reagent]
+    [secretary.core :as secretary]
+    [todomvc.components]
+    [todomvc.enflame :as flame]
+    [todomvc.events] ; These two are only required to make the compiler
+    [todomvc.topics] ; load them (see docs/Basic-App-Structure.md)
+    )
   (:import [goog History]
            [goog.history EventType]))
 

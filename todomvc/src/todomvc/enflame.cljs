@@ -37,3 +37,15 @@
 
 (defn define-topic! [& forms] (apply rf/reg-sub forms))
 
+; #todo need macro  (with-path ctx [:db :todos] ...) ; extract and replace in ctx
+; #todo need macro  (with-db ctx ...) ; hardwired for path of [:db]
+
+; #todo remember this (modify into `(definterceptor trim-event { ... } )`
+(comment
+  (def trim-event
+    (re-frame.core/->interceptor ; takes a naked map
+      :id     :trim-event
+      :before (fn [context]
+                (let [trim-fn (fn [event] (-> event rest vec))]
+                  (update-in context [:coeffects :event] trim-fn)))))
+  )

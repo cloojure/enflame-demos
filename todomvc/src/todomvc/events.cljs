@@ -155,12 +155,13 @@
   ; #todo      effects -> outputs   ; result
 
   ; the event handler being registered
-  (fn [ {:keys [db local-store-todos]} <> ]                  ; take 2 values from coeffects. Ignore event vector itself.
+  (fn [ ctx  <> ]                  ; take 2 values from coeffects. Ignore event vector itself.
     (println :initialise-db )
-    (let [result {:db  todo-db/default-db ; #awt
-                  ; (assoc todo-db/default-db :todos local-store-todos)
-                  }]
-      (println :initialise-db :leave result )
+    (let [{:keys [db local-store-todos]} ctx
+          result {:db todo-db/default-db ; #awt
+                  ; #awt (assoc todo-db/default-db :todos local-store-todos)
+                 }]
+      (println :initialise-db :leave result)
       result)))   ; all hail the new state to be put in app-db
 
 ; Need a way to document event names and args

@@ -14,7 +14,7 @@
 ; Why?  It is an efficiency thing. Every Layer 2 subscription will rerun any time
 ; that `app-db` changes (in any way). As a result, we want Layer 2 to be trivial.
 
-(flame/publish-topic!
+(flame/define-topic!
   :showing ; usage:   (rf/subscribe [:showing])
   (fn [db _]        ; db is the (map) value stored in the app-db atom
     (:showing db))) ; extract a value from the application state
@@ -25,7 +25,7 @@
 (defn sorted-todos-fn [db _]
   (:todos db))
 
-(flame/publish-topic!
+(flame/define-topic!
   :sorted-todos
   sorted-todos-fn)    ; usage: (rf/subscribe [:sorted-todos])
 
@@ -59,7 +59,7 @@
 ; In the two simple examples at the top, we only supplied the 2nd of these functions.
 ; But now we are dealing with intermediate (layer 3) nodes, we'll need to provide both fns.
 ;
-(flame/publish-topic!
+(flame/define-topic!
   :todos   ; usage:  (rf/subscribe [:todos])
   ; This function returns the input signals. In this case, it returns a single signal.
   ; Although not required in this example, it is called with two parameters
@@ -87,7 +87,7 @@
 ; This time the computation involves two input signals. As a result note:
 ;   - the first function (which returns the signals) returns a 2-vector
 ;   - the second function (which is the computation) destructures this 2-vector as its first parameter
-(flame/publish-topic!
+(flame/define-topic!
   :visible-todos
 
   ; Signal Function
@@ -125,14 +125,12 @@
 ; So that, by the way, is why Layer 2 subscriptions always re-calculate when `app-db`
 ; changes - `app-db` is literally their input signal.
 
-; #todo predefine a built-in topic :gui-state (nee app-db). All user-defined topics are like:
-;   (rs/register-topic!
-;     [:rs/gui-state :todos :showing ...]
-;     (fn [[gui-state todos showing ...] ...]
-;       ...))
-; or
-;     (rs/register-topic!
-;       [:rs/gui-state :todos :showing ...] ...)             ; auto declare arglist [gui-state todos showing ...]
+; #todo predefine a built-in topic :app-state (nee app-db). All user-defined topics are like:
+;   (rs/define-topic!
+;     [:rs/app-state :todos :showing ...]
+;     (fn [  < auto-destructure [app-state todos showing] > > > >
+;         query-vec 3rd-param]
+;       <forms> ))
 
 ; -------------------------------------------------------------------------------------
 ; SUGAR ?
@@ -143,7 +141,7 @@
 ; rf/reg-sub provides some macro sugar so you can nominate a very minimal
 ; vector of input signals. The 1st function is not needed.
 ; Here is the example above rewritten using the sugar.
-(flame/publish-topic! :visible-todos-with-sugar
+(flame/define-topic! :visible-todos-with-sugar
   :<- [:todos]
   :<- [:showing]
   (fn [[todos showing] _]
@@ -153,17 +151,17 @@
                       :all    identity)]
       (filter filter-fn todos))))
 
-(flame/publish-topic! :all-complete?
+(flame/define-topic! :all-complete?
   :<- [:todos]
   (fn [todos _]
     (every? :done todos)))
 
-(flame/publish-topic! :completed-count
+(flame/define-topic! :completed-count
   :<- [:todos]
   (fn [todos _]
     (count (filter :done todos))))
 
-(flame/publish-topic! :footer-counts
+(flame/define-topic! :footer-counts
   :<- [:todos]
   :<- [:completed-count]
   (fn [[todos completed] _]

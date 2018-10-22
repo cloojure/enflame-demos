@@ -70,7 +70,7 @@
 
 (defn footer-controls []
   (let [[num-active num-done] (flame/from-topic [:footer-counts])
-        showing             (flame/from-topic [:showing])
+        showing               (flame/from-topic [:showing])
         anchor-generator-fn (fn [filter-kw txt]
                               [:a {:class (when (= filter-kw showing) "selected")
                                    :href  (str "#/" (name filter-kw))} txt])]

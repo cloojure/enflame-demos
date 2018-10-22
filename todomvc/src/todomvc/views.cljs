@@ -2,40 +2,34 @@
   (:require
     [clojure.string :as str]
     [re-frame.core :as rf ]
-    [reagent.core :as r]))
-
-(enable-console-print!)
-
-(def ascii-code-return 13) ; #todo => tupelo.ascii
-(def ascii-code-escape 27)
-(defn event-value [event]  (-> event .-target .-value))
+    [reagent.core :as r]
+    [todomvc.enflame :as flame] ))
 
 ; These functions are all Reagent components
 
-(defn input-field-comp
+(defn input-field
   [{:keys [title on-save on-stop]}] ; #todo -> (with-map-vals [title on-save on-stop] ...)
-  (let [val  (r/atom title)
-        stop (fn []
-               (reset! val "")
-               (when on-stop (on-stop)))
-        save #(let [v (-> @val str str/trim)]
-                (on-save v)
-                (stop))]
+  (let [text-val (r/atom title) ; local state
+        stop-fn  (fn []
+                   (reset! text-val "")
+                   (when on-stop (on-stop)))
+        save-fn  (fn []
+                   (on-save (-> @text-val str str/trim))
+                   (stop-fn))]
     (fn [props]
       [:input
        (merge (dissoc props :on-save :on-stop :title)
          {:type        "text"
-          :value       @val
+          :value       @text-val
           :auto-focus  true
-          :on-blur     save
-          :on-change   #(reset! val (event-value %))
+          :on-blur     save-fn
+          :on-change   #(reset! text-val (flame/event-val %))
           :on-key-down #(let [rcvd (.-which %)] ; KeyboardEvent property
-                          (cond
-                            (= rcvd ascii-code-return) (save)
-                            (= rcvd ascii-code-escape) (stop)
-                            :else nil))})])))
+                          (condp = rcvd
+                                flame/ascii-code-return (save-fn)
+                                flame/ascii-code-escape (stop-fn)))})])))
 
-(defn single-task-comp []
+(defn task-list-row []
   (let [editing (r/atom false)]
     (fn [{:keys [id done title]}]
       [:li {:class (cond-> ""
@@ -43,72 +37,71 @@
                      @editing (str " editing"))}
        [:div.view
         [:input.toggle
-         {:type      "checkbox"
+         {:type      :checkbox
           :checked   done
-          :on-change #(rf/dispatch [:toggle-done id])}]
+          :on-change #(flame/dispatch-event [:toggle-done id])}]
         [:label
          {:on-double-click #(reset! editing true)}
          title]
         [:button.destroy
-         {:on-click #(rf/dispatch [:delete-todo id])}]]
+         {:on-click #(flame/dispatch-event [:delete-todo id])}]]
        (when @editing
-         [input-field-comp
+         [input-field
           {:class   "edit"
            :title   title
            :on-save #(if (seq %)
-                       (rf/dispatch [:save id %])
-                       (rf/dispatch [:delete-todo id]))
+                       (flame/dispatch-event [:save id %])
+                       (flame/dispatch-event [:delete-todo id]))
            :on-stop #(reset! editing false)}])])))
 
-(defn task-list-comp []
-  (let [visible-todos @(rf/subscribe [:visible-todos])
-        all-complete? @(rf/subscribe [:all-complete?])]
+(defn task-list []
+  (let [visible-todos (flame/from-topic [:visible-todos])
+        all-complete? (flame/from-topic [:all-complete?])]
     [:section#main
      [:input#toggle-all
       {:type      "checkbox"
        :checked   all-complete?
-       :on-change #(rf/dispatch [:complete-all-toggle])}]
+       :on-change #(flame/dispatch-event [:complete-all-toggle])}]
      [:label        ; #todo this does not seem to work (as a tooltip?)
       {:for "toggle-all"}
       "Mark all as complete"]
      [:ul#todo-list
       (for [todo-curr visible-todos]
-        ^{:key (:id todo-curr)} [single-task-comp todo-curr])]])) ; delegate to single-task-comp
+        ^{:key (:id todo-curr)} [task-list-row todo-curr])]])) ; delegate to task-list-row component
 
-(defn footer-controls-comp []
-  (let [[active done] @(rf/subscribe [:footer-counts])
-        showing @(rf/subscribe [:showing])
+(defn footer-controls []
+  (let [[num-active num-done] (flame/from-topic [:footer-counts])
+        showing (flame/from-topic [:showing])
         a-fn    (fn [filter-kw txt]
                   [:a {:class (when (= filter-kw showing) "selected")
                        :href  (str "#/" (name filter-kw))} txt])]
     [:footer#footer
      [:span#todo-count
-      [:strong active] " " (case active 1 "item" "items") " left"]
+      [:strong num-active] " " (case num-active 1 "item" "items") " left"]
      [:ul#filters
       [:li (a-fn :all "All")]
       [:li (a-fn :active "Active")]
       [:li (a-fn :done "Completed")]]
-     (when (pos? done)
-       [:button#clear-completed {:on-click #(rf/dispatch [:clear-completed])}
+     (when (pos? num-done)
+       [:button#clear-completed
+        {:on-click #(flame/dispatch-event [:clear-completed])}
         "Clear completed"])]))
 
-
-(defn task-entry-comp []
+(defn task-entry []
   [:header#header
    [:h1 "todos"]
-   [input-field-comp
+   [input-field
     {:id          "new-todo"
      :placeholder "What needs to be done?"
-     :on-save     #(when (seq %)
-                     (rf/dispatch [:add-todo %]))}]])
+     :on-save     #(when-not (empty? (str/trim %))
+                     (flame/dispatch-event [:add-todo %]))}]])
 
-
-(defn todo-app-comp []
+(defn todo-app []
   [:div
    [:section#todoapp
-    [task-entry-comp]
-    (when (seq @(rf/subscribe [:todos]))
-      [task-list-comp])
-    [footer-controls-comp]]
+    [task-entry]
+    (when-not (empty? (flame/from-topic [:todos]))
+      [task-list])
+    [footer-controls]]
    [:footer#info
     [:p "Double-click to edit a todo"]]])

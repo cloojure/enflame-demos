@@ -1,5 +1,7 @@
 (ns todomvc.subs
-  (:require [re-frame.core :as rf])) ; #todo => re-state ???
+  (:require
+    [todomvc.enflame :as flame]
+    [re-frame.core :as rf]))
 
 ; -------------------------------------------------------------------------------------
 ; Layer 2
@@ -11,20 +13,21 @@
 ; computation should happen in Layer 3.
 ; Why?  It is an efficiency thing. Every Layer 2 subscription will rerun any time
 ; that `app-db` changes (in any way). As a result, we want Layer 2 to be trivial.
-(rf/reg-sub         ; #todo => register-topic!
-  :showing          ; usage:   (rf/subscribe [:showing])
+
+(flame/register-topic!
+  :showing ; usage:   (rf/subscribe [:showing])
   (fn [db _]        ; db is the (map) value stored in the app-db atom
     (:showing db))) ; extract a value from the application state
 
-; Next, the registration of a similar handler is done in two steps.
-; First, we `defn` a pure handler function.  Then, we use `rf/reg-sub` to register it.
-; Two steps. This is different to that first registration, above, which was done
-; in one step using an anonymous function.
-(defn sorted-todos
-  [db _]
+; Next, the registration of a similar handler is done in two steps. First, we `defn` a pure handler
+; function.  Then, we use `rf/reg-sub` to register it. Two steps. This is different to
+; that first registration, above, which was done in one step using an anonymous function.
+(defn sorted-todos-fn [db _]
   (:todos db))
-(rf/reg-sub :sorted-todos
-  sorted-todos)    ; usage: (rf/subscribe [:sorted-todos])
+
+(flame/register-topic!
+  :sorted-todos
+  sorted-todos-fn)    ; usage: (rf/subscribe [:sorted-todos])
 
 ; -------------------------------------------------------------------------------------
 ; Layer 3
@@ -56,7 +59,8 @@
 ; In the two simple examples at the top, we only supplied the 2nd of these functions.
 ; But now we are dealing with intermediate (layer 3) nodes, we'll need to provide both fns.
 ;
-(rf/reg-sub :todos   ; usage:  (rf/subscribe [:todos])
+(flame/register-topic!
+  :todos   ; usage:  (rf/subscribe [:todos])
   ; This function returns the input signals. In this case, it returns a single signal.
   ; Although not required in this example, it is called with two parameters
   ; being the two values supplied in the originating `(rf/subscribe X Y)`.
@@ -83,7 +87,9 @@
 ; This time the computation involves two input signals. As a result note:
 ;   - the first function (which returns the signals) returns a 2-vector
 ;   - the second function (which is the computation) destructures this 2-vector as its first parameter
-(rf/reg-sub :visible-todos ; #todo: => register-topic-transform ?
+(flame/register-topic!
+  :visible-todos
+
   ; Signal Function
   ; Tells us what inputs flow into this node.
   ; Returns a vector of two input signals (in this case)
@@ -93,7 +99,7 @@
 
   ; Computation Function
   (fn [[todos showing] _]   ; that 1st parameter is a 2-vector of values
-    (let [filter-fn (case showing
+    (let [filter-fn (condp = showing
                       :active (complement :done)
                       :done   :done
                       :all    identity)]
@@ -137,7 +143,7 @@
 ; rf/reg-sub provides some macro sugar so you can nominate a very minimal
 ; vector of input signals. The 1st function is not needed.
 ; Here is the example above rewritten using the sugar.
-(rf/reg-sub :visible-todos-with-sugar
+(flame/register-topic! :visible-todos-with-sugar
   :<- [:todos]
   :<- [:showing]
   (fn [[todos showing] _]
@@ -147,17 +153,17 @@
                       :all    identity)]
       (filter filter-fn todos))))
 
-(rf/reg-sub :all-complete?
+(flame/register-topic! :all-complete?
   :<- [:todos]
   (fn [todos _]
     (every? :done todos)))
 
-(rf/reg-sub :completed-count
+(flame/register-topic! :completed-count
   :<- [:todos]
   (fn [todos _]
     (count (filter :done todos))))
 
-(rf/reg-sub :footer-counts
+(flame/register-topic! :footer-counts
   :<- [:todos]
   :<- [:completed-count]
   (fn [[todos completed] _]

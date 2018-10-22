@@ -2,13 +2,35 @@
   (:require
     [cljs.spec.alpha :as s]
     [re-frame.core :as rf]
-    [todomvc.db :as todo-db] ))
+    [todomvc.db :as todo-db]
+    [todomvc.enflame :as flame]))
 
+; context map (ctx):   { :coeffects   {:db {...}
+;                                      :other {...}}
+;                        :effects     {:db {...}
+;                                      :dispatch [...]}
+;                      }
+; intceptors' :before fns should accumulate data into :coeffects map
+; intceptors' :after  fns should accumulate data into   :effects map
+
+;-----------------------------------------------------------------------------
+; #todo unify interceptors/handlers:  all accept & return
+; #todo   ctx => {:state {...}   ; was `:db`
+; #todo           ... ...}       ; other info here
+; #todo unify coeffects (input vals) and effects (output vals)
+; #todo interceptors must fill in or act up vals (keys) they care about
+
+; #todo (definterceptor my-intc  ; added to :id field as kw
+; #todo   "doc string"
+; #todo   {:enter (fn [ctx] ...)              tx: ctx => ctx
+; #todo    :leave (fn [ctx] ...) } )
+
+;-----------------------------------------------------------------------------
 ; #todo :before    => :enter       to match pedestal
 ; #todo :after     => :leave
 
-; #todo coeffects  =>  global state
-; #todo   effects  =>     app state
+; coeffects  =>  state-in
+;   effects  =>  state-out
 
 ; #todo   maybe rename interceptor chain to intc-chain, proc-chain, transform-chain
 
@@ -79,31 +101,20 @@
   (when-not (s/valid? a-spec db)
     (throw (ex-info (str "spec check failed: " (s/explain-str a-spec db)) {}))))
 
-; now we create an interceptor using `after`
+; create an `after` interceptor
 (def check-spec-intc (rf/after (partial check-and-throw :todomvc.db/db)))
 
-; -- Second Interceptor -----------------------------------------------------
-;
-; Part of the TodoMVC challenge is to store todos in local storage.
-; Next, we define an interceptor to help with this challenge.
-; This interceptor runs `after` an event handler, and it stores the current todos into local storage.
-; Later, we include this interceptor into the interceptor chain
-; of all event handlers which modify todos.  In this way, we ensure that
-; every change to todos is written to local storage.
-(def ->local-store-intc (rf/after todo-db/todos->local-store))
-
 ; -- Interceptor Chain ------------------------------------------------------
-;
 ; Each event handler can have its own chain of interceptors.
 ; We now create the interceptor chain shared by all event handlers
 ; which manipulate todos. A chain of interceptors is a vector of interceptors.
 ; Explanation of the `path` Interceptor is given further below.
 (def std-interceptors
   [check-spec-intc      ; ensure the spec is still valid  (rf/after)
-   (rf/path :todos)     ; the 1st param given to handler will be the value from this path within db
-   ->local-store-intc]) ; write todos to localstore  (rf/after)
 
-; #todo kill off rf/path  ???   keep it simple & explicit
+   ; Part of the TodoMVC is to store todos in local storage. Here we define an interceptor to do this.
+   ; This interceptor runs `after` an event handler. It stores the current todos into local storage.
+   (rf/after todo-db/todos->local-store)]) ; write todos to localstore  (rf/after)
 
 ; -- Helpers -----------------------------------------------------------------
 (defn allocate-next-id
@@ -113,8 +124,7 @@
   ((fnil inc 0) (last (keys todos))))
 
 ; -- Event Handlers ----------------------------------------------------------
-
-; usage:  (dispatch [:initialise-db])
+; usage:  (flame/dispatch-event [:initialise-db])
 ;
 ; This event is dispatched when the app's `main` ns is loaded (todomvc.core).
 ; It establishes initial application state in `app-db`. That means merging:
@@ -127,69 +137,44 @@
 ;
 ; To fully understand this advanced topic, you'll have to read the tutorials
 ; and look at the bottom of `db.cljs` for the `:local-store-todos` cofx registration.
-(rf/reg-event-fx ; #todo reg-event-fx => subscribe-to
-  :initialise-db   ; event id being handled
-  ; #todo is there just one handler per event?
-  ; #todo   => (sethandler!    :evt-name  (fn [& args] ...))
-  ; #todo   => (clearhandler!  :evt-name)
-  ; #todo is there just one handler per event? => sethandler!
-
-  ; #todo can there be multiple event subscribers?
-  ; #todo   =>  (def subscriber-ref (event-subscription :evt-name (fn [& args] ...)))
-  ; #todo   =>  (clear-subscriber  :evt-name  subscriber-ref)
-  ; #todo   =>  (clear-subscribers :evt-name)
-  ; #todo   =>  (subscribers :evt-name)
-  ; #todo same for db-topic subscriptions
+(flame/event-handler-for! :initialise-db
+  ; #todo   => (event-handler-set!    :evt-name  (fn [& args] ...)) or subscribe-to  subscribe-to-event
+  ; #todo   => (event-handler-clear!  :evt-name)
+  ; #todo option for log wrapper (with-event-logging  logger-fn
+  ; #todo                          (event-handler-set! :evt-name  (fn [& args] ...)))
 
   ; the interceptor chain (a vector of 2 interceptors in this case)
   [(rf/inject-cofx :local-store-todos) ; gets todos from localstore, and puts value into coeffects arg
    check-spec-intc]  ; after event handler runs, check app-db for correctness. Does it still match Spec?
-  ; #todo  coeffects -> global state
+  ; #todo  context -> event
+  ; #todo    :event/id
+  ; #todo    :event/params
+  ; #todo    coeffects -> inputs    ; data
+  ; #todo      effects -> outputs   ; result
 
   ; the event handler being registered
-  (fn [{:keys [db local-store-todos]} _]                  ; take 2 values from coeffects. Ignore event vector itself.
+  (fn [ {:keys [db local-store-todos]} <> ]                  ; take 2 values from coeffects. Ignore event vector itself.
     {:db (assoc todo-db/default-db :todos local-store-todos)}))   ; all hail the new state to be put in app-db
 
-; usage:  (rf/dispatch [:set-showing :active])
-; This event is dispatched when the user clicks on one of the 3
-; filter buttons at the bottom of the display.
+; Need a way to document event names and args
+;    #todo (defevent set-showing [state])
+
+; usage:  (flame/dispatch-event [:set-showing :active])
+; This event is dispatched when the user clicks on one of the 3 filter buttons at the bottom of the display.
   ; #todo #awt merge => global state (old cofx)
-(rf/reg-event-db :set-showing     ; event-id
+(flame/event-handler-for!
+  :set-showing
+
   ; only one interceptor
   [check-spec-intc]  ; after event handler runs, check app-db for correctness. Does it still match Spec?
 
   ; handler
-  (fn [db [_ new-filter-kw]]     ; new-filter-kw is one of :all, :active or :done
-    (assoc db :showing new-filter-kw)))
+  (fn [ctx [_ new-filter-kw]]     ; new-filter-kw is one of :all, :active or :done
+    (assoc-in ctx [:db :showing] new-filter-kw)))
 
-; NOTE: below is a rewrite of the event handler (above) using a `path` Interceptor
-; You'll find it illuminating to compare this rewrite with the original.
-;
-; A `path` interceptor has BOTH a before and after action.
-; When you create one, you supply "a path" into `app-db`, like:
-; [:a :b 1]
-; The job of "before" is to replace the app-db with the value
-; of `app-db` at the nominated path. And, then, "after" to
-; take the event handler returned value and place it back into
-; app-db at the nominated path.  So the event handler works
-; with a particular, narrower path within app-db, not all of it.
-;
-; So, `path` operates a little like `update-in`
-(rf/reg-event-db :set-showing-using-path
-  ; this now a chain of 2 interceptors. Note use of `path`
-  [check-spec-intc (rf/path :showing)] ; #todo kill rf/path (duplication of api ability)
 
-  ; The event handler. Because of the `path` interceptor above, the 1st parameter to
-  ; the handler below won't be the entire 'db', and instead will
-  ; be the value at the path `[:showing]` within db.
-  ; Equally the value returned will be the new value for that path within app-db.
-  (fn [old-showing-value [_ new-showing-value]]
-    new-showing-value))                  ; return new state for the path
-
-; usage:  (rf/dispatch [:add-todo  "a description string"])
-; #todo rf/reg-event-db/fx  =>  set-event-handler!    (add to global state?) ; clear-event-handler!
-; #todo rf/reg-event-db/fx  =>  set-effect-handler!   (add to global state?) ; clear-effect-handler!
-(rf/reg-event-db :add-todo  ; given the text, create a new todo
+; #todo event handlers take only params-map (fn [params :- tsk/Map] ...)
+(flame/event-handler-for! :add-todo
   ; Use the standard interceptors, defined above, which we use for all todos-modifying
   ; event handlers. Looks after writing todos to LocalStore, etc.
   std-interceptors
@@ -200,43 +185,44 @@
   ; And, further, it means the event handler returns just the value to be
   ; put into the `[:todos]` path, and not the entire `db`.
   ; So, againt, a path interceptor acts like clojure's `update-in`
-  (fn [todos [_ text]] ; => {:global-state xxx   :event {:event-name xxx  :arg1 yyy  :arg2 zzz ...}}
-    (let [id (allocate-next-id todos)]
-      (assoc todos id {:id id :title text :done false}))))
-; #todo event handlers take only params-map (fn [params :- tsk/Map] ...)
+  (fn [ctx [_ text]] ; => {:global-state xxx   :event {:event-name xxx  :arg1 yyy  :arg2 zzz ...}}
+    (let [todos (get-in ctx [:db :todos])
+          id    (allocate-next-id todos)]
+      (assoc-in ctx [:db :todos id] {:id id :title text :done false}))))
 
-(rf/reg-event-db
-  :toggle-done
+
+(flame/event-handler-for! :toggle-done
   std-interceptors
-  (fn [todos [_ id]]
-    (update-in todos [id :done] not)))
+  (fn [ctx [_ id]]
+    (update-in ctx [:db :todos id :done] not)))
 
-(rf/reg-event-db
-  :save
+(flame/event-handler-for! :save
   std-interceptors
-  (fn [todos [_ id title]]
-    (assoc-in todos [id :title] title)))
+  (fn [ctx [_ id title]]
+    (assoc-in ctx [:db :todos id :title] title)))
 
-(rf/reg-event-db
-  :delete-todo
+(flame/event-handler-for! :delete-todo
   std-interceptors
-  (fn [todos [_ id]]
-    (dissoc todos id)))
+  (fn [ctx [_ id]]
+    (flame/dissoc-in ctx [:db :todos id])))
 
-(rf/reg-event-db
+(flame/event-handler-for!
   :clear-completed
   std-interceptors
-  (fn [todos _]
-    (let [done-ids (->> (vals todos)         ; find id's for todos where (:done -> true)
-                        (filter :done)
-                        (map :id))]
-      (reduce dissoc todos done-ids))))      ; delete todos which are done
+  (fn [ctx _]
+    (let [todos     (get-in ctx [:db :todos])
+          done-ids  (->> (vals todos) ; find id's for todos where (:done -> true)
+                      (filter :done)
+                      (map :id))
+          todos-new (reduce dissoc todos done-ids)]      ; delete todos which are done
+      (assoc-in ctx [:db :todos] todos-new))))
 
-(rf/reg-event-db
-  :complete-all-toggle
+(flame/event-handler-for! :complete-all-toggle
   std-interceptors
-  (fn [todos _]
-    (let [new-done (not-every? :done (vals todos))]   ; work out: toggle true or false?
-      (reduce #(assoc-in %1 [%2 :done] new-done)
-              todos
-              (keys todos)))))
+  (fn [ctx _]
+    (let [todos     (get-in ctx [:db :todos])
+          new-done  (not-every? :done (vals todos)) ; work out: toggle true or false?
+          todos-new (reduce #(assoc-in %1 [%2 :done] new-done)
+                      todos
+                      (keys todos))]
+      (assoc-in ctx [:db :todos] todos-new))))

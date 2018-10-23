@@ -1,10 +1,13 @@
 (defproject enflame-todomvc "0.10.5"
-  :dependencies [[org.clojure/clojure        "1.9.0"]
-                 [org.clojure/clojurescript  "1.10.339"]
-                 [reagent  "0.8.1"]
-                 [re-frame "0.10.6"]
-                 [binaryage/devtools "0.9.4"]
-                 [secretary "1.2.3"]]
+  :dependencies
+  [
+   [binaryage/devtools "0.9.4"]
+   [org.clojure/clojure "1.9.0"]
+   [org.clojure/clojurescript "1.10.339"]
+   [re-frame "0.10.6"]
+   [reagent "0.8.1"]
+   [secretary "1.2.3"]
+   ]
 
   :plugins [[lein-cljsbuild "1.1.7"]
             [lein-figwheel  "0.5.16"]]
